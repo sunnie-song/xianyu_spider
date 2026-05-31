@@ -25,6 +25,8 @@
 
 ## 快速开始
 
+cd /Users/sunnie/Desktop/github/xianyu_spider && python3 test.py
+
 ### 环境配置
 
 1. 安装依赖

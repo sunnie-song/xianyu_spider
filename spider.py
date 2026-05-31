@@ -178,7 +178,7 @@ async def scrape_xianyu(keyword: str, max_pages: int = 1):
                 pass
             
             await page.click('text=新发布')
-            await page.click('text=最新')
+            await page.click('text=7')
             
             # 注册响应监听
             page.on("response", on_response)
