@@ -66,14 +66,10 @@ def save_to_excel(data_list, filename="商品数据.xlsx"):
     writer.close()
     print(f"数据已保存到：{filepath}")
 
-
 def scrape_xianyu(keyword, max_pages=1):
     data_list = []  # 统一存储所有数据
-    page_filter_status = []  # 记录每页的筛选状态 [(页码, filterField), ...]
     
-    last_filter_check = -1  # 避免重复打印
     def on_response(response):
-        nonlocal last_filter_check
         if "h5api.m.goofish.com/h5/mtop.taobao.idlemtopsearch.pc.search" in response.url:
             try:
                 result_json = response.json()
@@ -83,15 +79,6 @@ def scrape_xianyu(keyword, max_pages=1):
                     main_data = safe_get(item, "data", "item", "main", "exContent", default={})
                    
                     click_params = safe_get(item, "data", "item", "main", "clickParam", "args", default={})
-                    
-                    # ── 提取并记录筛选字段（用于校验翻页时筛选是否丢失） ──
-                    current_page = safe_get(click_params, "page", default="?")
-                    filter_field = safe_get(click_params, "filterField", default="")
-                    if current_page != last_filter_check:
-                        status_icon = "✅" if filter_field else "❌"
-                        print(f"  第{current_page}页 筛选状态: {status_icon} filterField='{filter_field}'")
-                        page_filter_status.append((current_page, filter_field))
-                        last_filter_check = current_page
                     
                     # 解析商品信息
                     title = safe_get(main_data, "title", default="未知标题")
@@ -124,12 +111,10 @@ def scrape_xianyu(keyword, max_pages=1):
                     
                     # 时间转换
                     publish_time = safe_get(click_params, "publishTime", default="")
-                    publish_ts = 0  # 毫秒时间戳，用于客户端7天过滤
                     publish_date = "未知时间"
                     if publish_time.isdigit():
                         try:
-                            publish_ts = int(publish_time)
-                            dt = datetime.fromtimestamp(publish_ts / 1000)
+                            dt = datetime.fromtimestamp(int(publish_time)/1000)
                             publish_date = dt.strftime("%Y-%m-%d %H:%M")
                         except:
                             pass
@@ -160,13 +145,13 @@ def scrape_xianyu(keyword, max_pages=1):
                     data_list.append({
                         "商品标题": title,
                         "当前售价": price,
+                      #   "原价": ori_price,
                         "服务标签": service_str,
                         "发货地区": area,
                         "卖家昵称": seller,
                         "商品链接": clean_link,
                         "商品图片链接": image_url,
-                        "发布时间": publish_date,
-                        "_publish_ts": publish_ts,  # 毫秒时间戳，用于7天过滤
+                        "发布时间": publish_date
                     })
 
             except Exception as e:
@@ -245,22 +230,6 @@ def scrape_xianyu(keyword, max_pages=1):
                 page.wait_for_timeout(2000)
                 seen_pages += 1
                 print(f"正在处理第 {seen_pages}/{max_pages} 页...")
-            # ── 筛选校验汇总 ──
-            if page_filter_status:
-                all_ok = all(f for _, f in page_filter_status)
-                print(f"\n筛选校验: {'✅ 全部通过' if all_ok else '❌ 部分页面筛选丢失!'}")
-                for pg, ff in page_filter_status:
-                    print(f"  第{pg}页 filterField={ff or '(空: 筛选未生效)'}")
-
-            # ── 客户端 7 天过滤（API 的 publishDays 筛选不完全可靠） ──
-            from datetime import timedelta
-            cutoff_ms = int((datetime.now() - timedelta(days=7)).timestamp() * 1000)
-            before = len(data_list)
-            data_list = [item for item in data_list if item.pop("_publish_ts", 0) >= cutoff_ms]
-            after = len(data_list)
-            if before > after:
-                print(f"\n7天过滤: 剔除 {before - after} 条超期数据，保留 {after} 条")
-
             # 最终保存数据
             if data_list:
                 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
